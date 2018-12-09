@@ -14,12 +14,17 @@ for k=1:number_of_categories
     length_A = metaA(k+1,2);
     length_B = metaB(k+1,2);
     temp = zeros(1,3);
+    % get subset of data to work on, based on category
+    temp_A = getDataSet(dataA, length_A, k);
+    temp_B = getDataSet(dataB, length_B, k);
+    % run through all of B
     for j=1:length_B
-        [inStartB, inEndB] = getBoundsB(dataB, j);
+        [inStartB, inEndB] = getBoundsB(temp_B, j);
         start_index = 0;
         end_index = 0;
+        % search in all of A
         for i=1:length_A
-            [inStartA, inEndA] = getBoundsA(dataA,i);
+            [inStartA, inEndA] = getBoundsA(temp_A,i);
             if( start_index == 0 && ((inStartA>=inStartB && inStartA<=inEndB) || ... %case 1
                 (inEndA>=inStartB && inEndA<=inEndB) || ... %case 2
                 (inStartA>=inStartB && inEndA<=inEndB) || ... %case 3
@@ -36,8 +41,11 @@ for k=1:number_of_categories
                     end_index = end_index + 1;
             end
         end
+        % save temporary results
         temp(j,1:3) = [k start_index end_index];
     end
+    % combine all results in one matrix
     indices = [indices; temp];
 end
+% remove first  line from initialization after the algortihm is finished
 indices(1,:) = [];
