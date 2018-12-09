@@ -113,6 +113,9 @@ void intervalJoinCPU(int id)
 		search(root,inStartB[i],inEndB[i],i);
         outCPU_Begin[i]=start_index[i];
         outCPU_End[i]=end_index[i];
+		if(start_index[i] != INT_MAX) {
+			printf("CPU result: i:%d; start_index: %d; end_index: %d \n", i, start_index[i], end_index[i]);
+		}	
     }
 	int total_intersects=0;
         for(i=0;i<setB.length[id];i++){
@@ -131,30 +134,45 @@ void intervalJoinGPU(int *dev_inStartA, int *dev_inEndA, int *dev_inStartB, int 
 {
 	int indexB = threadIdx.x + blockIdx.x * blockDim.x;	
 	
+	//printf("threadIdx.x: %d; blockIdx.x: %d; blockDim.x: %d; indexB: %d \n", threadIdx.x, blockIdx.x, blockDim.x, indexB);	
+	
 	dev_outStart[indexB] = INT_MAX;
 	dev_outEnd[indexB] = INT_MIN;
 	for(int indexA=0; indexA<(*dev_lengthA); indexA++) {
-		if{dev_outStart == INT_MAX  && 
-			(
-				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-				( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-				( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) //fourth case
+		__syncthreads();
+		if(dev_outStart[indexB] == INT_MAX  && 
+				(
+					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+					( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+					( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+				)
 			)
-		}
+		{
 			dev_outStart[indexB] = indexA;
 			dev_outEnd[indexB] = indexA;
-		else if 
-			{
-				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-				( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-				( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) //fourth case
+			if(indexB==0) {
+				printf("first condition %d %d %d \n", indexB, dev_outStart[indexB], dev_outEnd[indexB]);
 			}
+		}
+		else if (
+					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+					( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+					( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+				)
+		{
 			dev_outEnd[indexB] = dev_outEnd[indexB] + 1;
+			if(indexB==0) {
+				printf("second condition %d %d \n", indexB, dev_outEnd[indexB]);	
+			}
+		}
+		else
+			if(dev_outStart[indexB] != INT_MAX) {
+				printf("GPU result: start_index: %d; end_index: %d \n", dev_outStart[indexB], dev_outEnd[indexB]);
+			}		
+			//break;
 	}
-	
-	__syncthreads();
 
 }
 /***	Implement your CUDA Kernel here	***/
@@ -176,15 +194,16 @@ int main(){
 	fpA = fopen ("data/dataA.csv","r");
 	fpB = fopen ("data/dataB.csv","r");
 	
-	for(i=0;i<setA.count;i++){
+	//for(i=0;i<setA.count;i++){
+		i=0;
 		init_from_csv(fpA, fpB, i);
 
-		// clock_gettime(CLOCK_REALTIME, &time_begin);
-		// intervalJoinCPU(i);
-		// clock_gettime(CLOCK_REALTIME, &time_end);
-		// intervalJoinCPUExecTime = timespec_diff_us(time_begin, time_end);
-		// cout << "CPU time for executing a typical Interval Join = " <<  intervalJoinCPUExecTime / 1000 << "ms" << endl;
-		// cpuTotalTime+=intervalJoinCPUExecTime;
+		clock_gettime(CLOCK_REALTIME, &time_begin);
+		intervalJoinCPU(i);
+		clock_gettime(CLOCK_REALTIME, &time_end);
+		intervalJoinCPUExecTime = timespec_diff_us(time_begin, time_end);
+		cout << "CPU time for executing a typical Interval Join = " <<  intervalJoinCPUExecTime / 1000 << "ms" << endl;
+		cpuTotalTime+=intervalJoinCPUExecTime;
 
 		clock_gettime(CLOCK_REALTIME, &time_begin);
 		
@@ -224,7 +243,7 @@ int main(){
 		printf("CATEGORY : %d\n",i);
 		printf("NbBlocks : %d\n",NbBlocks);
 		
-		scanf("%c",&a);
+		//scanf("%c",&a);
 
 		/***Configure the CUDA Kernel call here***/
 		intervalJoinGPU<<<NbBlocks,THREADS_PER_BLOCK>>>(dev_inStartA, dev_inEndA, dev_inStartB, dev_inEndB, dev_outStart, dev_outEnd, dev_lengthA, dev_lengthB); // Lunch the kernel
@@ -241,12 +260,12 @@ int main(){
 		cout << "GPU time for executing a typical Interval Join = " << intervalJoinGPUExecTime / 1000 << "ms" << endl;
 		cpuTotalTime+=intervalJoinGPUExecTime;
 		
-		// if(checker(setB.length[i])){
-			// cout << "Congratulations! You pass the check." << endl;
-			// cout << "Speedup: " << (float)intervalJoinCPUExecTime / intervalJoinGPUExecTime << endl;
-		// }
-		// else
-			// cout << "Sorry! Your result is wrong." << endl;
+		if(checker(setB.length[i])){
+			cout << "Congratulations! You pass the check." << endl;
+			cout << "Speedup: " << (float)intervalJoinCPUExecTime / intervalJoinGPUExecTime << endl;
+		}
+		else
+			cout << "Sorry! Your result is wrong." << endl;
 
 		
 			
@@ -258,8 +277,8 @@ int main(){
 		cudaFree( dev_outEnd ); 
 		ending();
 		
-		scanf("%c",&a);
-	}
+		// scanf("%c",&a);
+	//}
 
 	
 	
