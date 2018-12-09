@@ -129,71 +129,32 @@ void intervalJoinCPU(int id)
 __global__
 void intervalJoinGPU(int *dev_inStartA, int *dev_inEndA, int *dev_inStartB, int *dev_inEndB, int *dev_outStart, int *dev_outEnd, int *dev_lengthA, int *dev_lengthB)
 {
-int indexB = threadIdx.x + blockIdx.x * blockDim.x;
-int flagUp = 0, Overlapped = 0, indexA;
-
-
-//printf("THREAD %d", threadIdx.x);
-
-//printf("THREAD %d : Interval B[%d] :[ %d , %d ]  ;  Interval A[%d] [ %d , %d ] Overlapped = %d \n",threadIdx.x, indexB, dev_inStartB[indexB],dev_inEndB[indexB], indexA, dev_inStartA[indexA],dev_inEndA[indexA],Overlapped);	
-if (indexB <= *dev_lengthB) {
+	int indexB = threadIdx.x + blockIdx.x * blockDim.x;	
 	
-	for(indexA=0;indexA<=(*dev_lengthA-1);indexA++)
-	{
-		if ((dev_inStartA[indexA] <= dev_inStartB[indexB] &&  dev_inEndA[indexA] >= dev_inEndB[indexB]) ||  
-			(dev_inStartB[indexB] >= dev_inStartA[indexA] && dev_inStartB[indexB] <= dev_inEndA[indexA] ) || 
-			(dev_inEndB[indexB] >= dev_inStartA[indexA] && dev_inEndB[indexB] <=  dev_inEndA[indexA]) || 
-			(dev_inStartA[indexA] >= dev_inStartB[indexB] && dev_inEndA[indexA] <=  dev_inEndB[indexB])){ 
-
-			if(flagUp == 0){
-				flagUp = 1;
-				dev_outStart[indexB] = indexA;
-				
-				if(indexB<= 50 && indexB<= 150){
-					printf("   |   B no %d   [ %d , %d ]   |   Start join at  |   A no %d   [ %d , %d ]   |\n",indexB ,dev_inStartB[indexB] ,dev_inEndB[indexB], indexA, dev_inStartA[indexA], dev_inEndA[indexA] );
-				}
-				if (!((dev_inStartA[indexA] <= dev_inStartB[indexB] &&  dev_inEndA[indexA] >= dev_inEndB[indexB]) ||  
-				(dev_inStartB[indexB] >= dev_inStartA[indexA] && dev_inStartB[indexB] <= dev_inEndA[indexA] ) || 
-				(dev_inEndB[indexB] >= dev_inStartA[indexA] && dev_inEndB[indexB] <=  dev_inEndA[indexA]) || 
-				(dev_inStartA[indexA] >= dev_inStartB[indexB] && dev_inEndA[indexA] <=  dev_inEndB[indexB]))){ 
-					dev_outStart[indexB] = indexA;
-					printf("   |   B no %d   [ %d , %d ]   |   End join at  |   A no %d   [ %d , %d ]   |\n",indexB ,dev_inStartB[indexB] ,dev_inEndB[indexB], indexA, dev_inStartA[indexA], dev_inEndA[indexA] );
-
-				}
-			}
-			else
-			{
-				break;
-			}
-				
+	dev_outStart[indexB] = INT_MAX;
+	dev_outEnd[indexB] = INT_MIN;
+	for(int indexA=0; indexA<(*dev_lengthA); indexA++) {
+		if{dev_outStart == INT_MAX  && 
+			(
+				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+				( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+				( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) //fourth case
+			)
 		}
+			dev_outStart[indexB] = indexA;
+			dev_outEnd[indexB] = indexA;
+		else if 
+			{
+				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+				( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+				( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) //fourth case
+			}
+			dev_outEnd[indexB] = dev_outEnd[indexB] + 1;
 	}
 	
-	// flagUp = 0 ;
-	
-	// for(indexA=(*dev_lengthA-1);indexA>=0;indexA--)
-	// {
-		// if ((dev_inStartA[indexA] <= dev_inStartB[indexB] &&  dev_inEndA[indexA] >= dev_inEndB[indexB]) ||  
-			// (dev_inStartB[indexB] >= dev_inStartA[indexA] && dev_inStartB[indexB] <= dev_inEndA[indexA] ) || 
-			// (dev_inEndB[indexB] >= dev_inStartA[indexA] && dev_inEndB[indexB] <=  dev_inEndA[indexA]) || 
-			// (dev_inStartA[indexA] >= dev_inStartB[indexB] && dev_inEndA[indexA] <=  dev_inEndB[indexB])){ 
-
-			// if(flagUp == 0){
-				// flagUp = 1;
-				// dev_outEnd[indexB] = indexA;
-			// printf("   |   B no %d   [ %d , %d ]   |   End join at  |   A no %d   [ %d , %d ]   |\n",indexB ,dev_inStartB[indexB] ,dev_inEndB[indexB], indexA, dev_inStartA[indexA], dev_inEndA[indexA] );
-			// }
-			// else
-			// {
-				// break;
-			// }		
-		// }
-	// }
-}
-
-
-__syncthreads();
-	
+	__syncthreads();
 
 }
 /***	Implement your CUDA Kernel here	***/
