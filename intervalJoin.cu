@@ -112,7 +112,10 @@ void intervalJoinCPU(int id)
         end_index[i]=INT_MIN;
 		search(root,inStartB[i],inEndB[i],i);
         outCPU_Begin[i]=start_index[i];
-        outCPU_End[i]=end_index[i];	
+        outCPU_End[i]=end_index[i];
+		if(start_index[i] != INT_MAX) {
+			printf("%d; %d; %d; %d; %d; %d; %d;\n", *inStartA, *inEndA, i, inStartB[i], inEndB[i], outCPU_Begin[i], outCPU_End[i]);
+		}
     }
 	int total_intersects=0;
         for(i=0;i<setB.length[id];i++){
@@ -120,7 +123,6 @@ void intervalJoinCPU(int id)
                         total_intersects+=(outCPU_End[i]-outCPU_Begin[i]+1);
         }
     }
-	
 	free(start_index);
 	free(end_index);
 }
@@ -131,38 +133,39 @@ void intervalJoinGPU(int *dev_inStartA, int *dev_inEndA, int *dev_inStartB, int 
 {
 	int indexB = threadIdx.x + blockIdx.x * blockDim.x;	
 	
-	for(int indexA=0; indexA<dev_lengthA; indexA++) {
-		__syncthreads();
-		if(dev_outStart[indexB] == INT_MAX  && 
-				(
-					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-					( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-					( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
-				)
-			)
-		{
-			dev_outStart[indexB] = indexA;
-			dev_outEnd[indexB] = indexA;
+	if(indexB<=dev_lengthB) {
+		for(int indexA=0; indexA<dev_lengthA; indexA++) {
 			__syncthreads();
-		}
-		else if (
-					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-					( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-					( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-					( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+			if(dev_outStart[indexB] == INT_MAX  && 
+					(
+						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+						( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+						( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+					)
 				)
-		{
-			dev_outEnd[indexB] = dev_outEnd[indexB] + 1;
-			__syncthreads();
+			{
+				dev_outStart[indexB] = indexA;
+				dev_outEnd[indexB] = indexA;
+				__syncthreads();
+			}
+			else if (
+						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+						( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+						( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+					)
+			{
+				dev_outEnd[indexB] = dev_outEnd[indexB] + 1;
+				__syncthreads();
+			}
 		}
 	}
-	__syncthreads();
+/* 	__syncthreads();
 	if(dev_outEnd[indexB] != INT_MIN) {
-		printf("%d; %d; %d; \n", indexB, dev_outStart[indexB], dev_outEnd[indexB]);	
+		printf("%d; %d; %d; %d; %d; %d; %d;\n", *dev_inStartA, *dev_inEndA, indexB, dev_inStartB[indexB], dev_inEndB[indexB], dev_outStart[indexB], dev_outEnd[indexB]);	
 	}
-	__syncthreads();
-	
+	__syncthreads(); */
 }
 /***	Implement your CUDA Kernel here	***/
 
@@ -228,7 +231,7 @@ int main(){
 		}
 
 		/***Configure the CUDA Kernel call here***/
-		intervalJoinGPU<<<NbBlocks,THREADS_PER_BLOCK>>>(dev_inStartA, dev_inEndA, dev_inStartB, dev_inEndB, dev_outStart, dev_outEnd, setA.length[i], setB.length[i]); // Lunch the kernel
+		//intervalJoinGPU<<<NbBlocks,THREADS_PER_BLOCK>>>(dev_inStartA, dev_inEndA, dev_inStartB, dev_inEndB, dev_outStart, dev_outEnd, setA.length[i], setB.length[i]); // Lunch the kernel
 		
 		cudaDeviceSynchronize(); // Do synchronization before clock_gettime()
 		
