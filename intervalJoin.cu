@@ -178,7 +178,6 @@ int main(){
 	fpB = fopen ("data/dataB.csv","r");
 	
 	for(i=0;i<setA.count;i++){
-		i=0;
 		init_from_csv(fpA, fpB, i);
 
  		clock_gettime(CLOCK_REALTIME, &time_begin);
@@ -254,15 +253,15 @@ int main(){
 		
 		clock_gettime(CLOCK_REALTIME, &time_end);
 		intervalJoinGPUExecTime = timespec_diff_us(time_begin, time_end);
-		//cout << "GPU time for executing a typical Interval Join = " << intervalJoinGPUExecTime / 1000 << "ms" << endl;
+		cout << "GPU time for executing a typical Interval Join = " << intervalJoinGPUExecTime / 1000 << "ms" << endl;
 		cpuTotalTime+=intervalJoinGPUExecTime;
 		
-/* 		if(checker(setB.length[i])){
+ 		if(checker(setB.length[i])){
 			cout << "Congratulations! You pass the check." << endl;
 			cout << "Speedup: " << (float)intervalJoinCPUExecTime / intervalJoinGPUExecTime << endl;
 		}
 		else
-			cout << "Sorry! Your result is wrong." << endl; */
+			cout << "Sorry! Your result is wrong." << endl;
 
 		
 			
