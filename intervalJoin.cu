@@ -113,9 +113,10 @@ void intervalJoinCPU(int id)
 		search(root,inStartB[i],inEndB[i],i);
         outCPU_Begin[i]=start_index[i];
         outCPU_End[i]=end_index[i];
+		/*
 		if(start_index[i] != INT_MAX) {
 			printf("%d; %d; %d; %d; %d; %d; %d;\n", *inStartA, *inEndA, i, inStartB[i], inEndB[i], outCPU_Begin[i], outCPU_End[i]);
-		}
+		}*/
     }
 	int total_intersects=0;
         for(i=0;i<setB.length[id];i++){
@@ -133,39 +134,31 @@ void intervalJoinGPU(int *dev_inStartA, int *dev_inEndA, int *dev_inStartB, int 
 {
 	int indexB = threadIdx.x + blockIdx.x * blockDim.x;	
 	
-	if(indexB<=dev_lengthB) {
+	if(indexB<dev_lengthB) {
 		for(int indexA=0; indexA<dev_lengthA; indexA++) {
-			__syncthreads();
-			if(dev_outStart[indexB] == INT_MAX  && 
-					(
-						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-						( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-						( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
-					)
-				)
+			if(
+				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
+				( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
+				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
+				( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+			)
 			{
-				dev_outStart[indexB] = indexA;
-				dev_outEnd[indexB] = indexA;
-				__syncthreads();
+				if(dev_outStart[indexB]==INT_MAX){
+					dev_outStart[indexB] = indexA;
+					dev_outEnd[indexB] = indexA;
+				}
+				else
+					dev_outEnd[indexB] = indexA;
 			}
-			else if (
-						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-						( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-						( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-						( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
-					)
-			{
-				dev_outEnd[indexB] = dev_outEnd[indexB] + 1;
-				__syncthreads();
-			}
+			if(dev_outEnd[indexB]==indexA-1)
+				break;
 		}
+		//__syncthreads();
 	}
 /* 	__syncthreads();
 	if(dev_outEnd[indexB] != INT_MIN) {
 		printf("%d; %d; %d; %d; %d; %d; %d;\n", *dev_inStartA, *dev_inEndA, indexB, dev_inStartB[indexB], dev_inEndB[indexB], dev_outStart[indexB], dev_outEnd[indexB]);	
-	}
-	__syncthreads(); */
+	*/
 }
 /***	Implement your CUDA Kernel here	***/
 
@@ -184,7 +177,7 @@ int main(){
 	fpA = fopen ("data/dataA.csv","r");
 	fpB = fopen ("data/dataB.csv","r");
 	
-	//for(i=0;i<setA.count;i++){
+	for(i=0;i<setA.count;i++){
 		i=0;
 		init_from_csv(fpA, fpB, i);
 
@@ -194,13 +187,16 @@ int main(){
 		intervalJoinCPUExecTime = timespec_diff_us(time_begin, time_end);
 		cout << "CPU time for executing a typical Interval Join = " <<  intervalJoinCPUExecTime / 1000 << "ms" << endl;
 		cpuTotalTime+=intervalJoinCPUExecTime;
-		
-/*   	for(int k=0;k<setB.length[i];k++)
+		int cpu_count=0;
+		for(int k=0;k<setB.length[i];k++)
 		{
 			if(outCPU_Begin[k] != INT_MAX) {
-				printf("%d; %d; %d; \n",k,outCPU_Begin[k],outCPU_End[k]);
+				//printf("%d; %d; %d; \n",k,outCPU_Begin[k],outCPU_End[k]);
+				cpu_count+=outCPU_End[k]-outCPU_Begin[k]+1;
 			}	
-		} */
+		} 
+		cout<<"CPU Count="<<cpu_count<<endl;
+		
 		clock_gettime(CLOCK_REALTIME, &time_begin);
 		
 		 /***Do the required GPU Memory allocation here***/
@@ -231,13 +227,12 @@ int main(){
 		}
 
 		/***Configure the CUDA Kernel call here***/
-		//intervalJoinGPU<<<NbBlocks,THREADS_PER_BLOCK>>>(dev_inStartA, dev_inEndA, dev_inStartB, dev_inEndB, dev_outStart, dev_outEnd, setA.length[i], setB.length[i]); // Lunch the kernel
+		intervalJoinGPU<<<NbBlocks,THREADS_PER_BLOCK>>>(dev_inStartA, dev_inEndA, dev_inStartB, dev_inEndB, dev_outStart, dev_outEnd, setA.length[i], setB.length[i]); // Lunch the kernel
 		
 		cudaDeviceSynchronize(); // Do synchronization before clock_gettime()
-		
 		/***Copy back the result from GPU Memory to CPU memory arrays outGPU_Begin and outGPU_End***/
-		cudaMemcpy( outGPU_Begin, dev_outStart, sizeof(outGPU_Begin), cudaMemcpyDeviceToHost  ); 
-		cudaMemcpy( outGPU_End, dev_outEnd, sizeof(outGPU_End), cudaMemcpyDeviceToHost  );
+		cudaMemcpy( outGPU_Begin, dev_outStart, setB.length[i]*sizeof(int), cudaMemcpyDeviceToHost  ); 
+		cudaMemcpy( outGPU_End, dev_outEnd, setB.length[i]*sizeof(int), cudaMemcpyDeviceToHost  );
 		/***Copy back the result from GPU Memory to CPU memory arrays outGPU_Begin and outGPU_End***/
 		
 /* 		for(int k=0;k<setB.length[i];k++)
@@ -246,6 +241,16 @@ int main(){
 				printf("%d; %d; %d; \n",k,outGPU_Begin[k],outGPU_End[k]);
 			}	
 		} */
+		
+		int gpu_count=0;
+		for(int k=0;k<setB.length[i];k++)
+		{
+			if(outGPU_Begin[k] != INT_MAX) {
+				//printf("%d; %d; %d; \n",k,outCPU_Begin[k],outCPU_End[k]);
+				gpu_count+=outGPU_End[k]-outGPU_Begin[k]+1;
+			}	
+		} 
+		cout<<"GPU Count="<<gpu_count<<endl;
 		
 		clock_gettime(CLOCK_REALTIME, &time_end);
 		intervalJoinGPUExecTime = timespec_diff_us(time_begin, time_end);
@@ -269,7 +274,7 @@ int main(){
 		cudaFree( dev_outEnd ); 
 		ending();
 		
-	//}
+	}
 
 	
 	
