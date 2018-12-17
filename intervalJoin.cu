@@ -132,15 +132,19 @@ void intervalJoinCPU(int id)
 __global__
 void intervalJoinGPU(int *dev_inStartA, int *dev_inEndA, int *dev_inStartB, int *dev_inEndB, int *dev_outStart, int *dev_outEnd, int dev_lengthA, int dev_lengthB)
 {
-	int indexB = threadIdx.x + blockIdx.x * blockDim.x;	
+	int indexB = threadIdx.x + blockIdx.x * blockDim.x;
+	int inStartB = dev_inStartB[indexB];
+	int inEndB = dev_inEndB[indexB];
+	int lengthB = dev_lengthB;
+	int lengthA = dev_lengthA;
 	
-	if(indexB<dev_lengthB) {
-		for(int indexA=0; indexA<dev_lengthA; indexA++) {
+	if(indexB<lengthB) {
+		for(int indexA=0; indexA<lengthA; indexA++) {
 			if(
-				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inStartA[indexA]<=dev_inEndB[indexB] ) || //first case
-				( dev_inEndA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //second case
-				( dev_inStartA[indexA]>=dev_inStartB[indexB] && dev_inEndA[indexA]<=dev_inEndB[indexB] ) || //third case
-				( dev_inStartA[indexA]<=dev_inStartB[indexB] && dev_inEndA[indexA]>=dev_inEndB[indexB] ) //fourth case
+				( dev_inStartA[indexA]>=inStartB && dev_inStartA[indexA]<=inEndB ) || //first case
+				( dev_inEndA[indexA]>=inStartB && dev_inEndA[indexA]<=inEndB ) || //second case
+				( dev_inStartA[indexA]>=inStartB && dev_inEndA[indexA]<=inEndB ) || //third case
+				( dev_inStartA[indexA]<=inStartB && dev_inEndA[indexA]>=inEndB ) //fourth case
 			)
 			{
 				if(dev_outStart[indexB]==INT_MAX){
